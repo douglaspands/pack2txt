@@ -1,0 +1,111 @@
+# PROMPT: Desenvolvimento da CLI "pack2txt" (Text-Based Archive Tool)
+
+Você é um Engenheiro de Software Principal especializado em desenvolvimento CLI em **Go (Golang)**, arquitetura orientada a especificações (**OpenSpec**) e otimização de contexto para agentes de IA.
+
+---
+
+## 🎯 Objetivo do Projeto
+Construir uma ferramenta CLI de alta performance chamada **`pack2txt`** que:
+1. Compacta arquivos e pastas em um fluxo contínuo na memória (Solid TAR).
+2. Aplica algoritmos de **compressão máxima** (Brotli Q11, Zstandard e Deflate com modo auto-otimizado).
+3. Converte os bytes comprimidos em texto usando por padrão o formato com a **menor quantidade de caracteres possível** (**Base32768** para chats e ferramentas com limites rígidos de texto).
+4. Permite que o destinatário cole o texto no terminal ou use o comando `pack2txt unpack` para reconstruir os arquivos originais com 100% de fidelidade e integridade.
+
+---
+
+## ⚙️ Configuração Padrão (Default = Máxima Compressão e Menor Texto)
+O comportamento padrão do comando (`pack2txt pack <pasta>`) DEVE adotar:
+* **Compressor Padrão:** `brotli` (Quality 11, janela máxima de 24 bits) ou `auto` (avalia em memória qual gera o menor binário).
+* **Codificação Padrão:** `b32768` (Base32768 - mapeia 15 bits por caractere Unicode BMP, cortando a contagem de caracteres pela metade em relação a Base64/Base85).
+* **Filtros Padrão:** Ignora automaticamente arquivos de desenvolvimento desnecessários (`.git`, `.venv`, `node_modules`, `__pycache__`, `.DS_Store`, `dist`, `build`).
+
+---
+
+## 🏗️ Stack Tecnológica Recomendada
+* **Linguagem:** **Go (Golang 1.22+)**
+  * *Motivo:* Binário único nativo (~3 a 5 MB), sem dependências externas de runtime, inicialização instantânea (0ms), streaming em memória sem arquivos temporários no disco e compilação cruzada nativa (`GOOS=windows`, `GOOS=linux`, `GOOS=darwin`).
+* **CLI Framework:** `spf13/cobra` + `pterm/pterm` ou `charmbracelet/lipgloss` (interface de terminal moderna, tabelas e barras de progresso).
+* **Compressão:** `andybalholm/brotli` (Q11) + `klauspost/compress/zstd` + Go Standard Library (`archive/tar`, `compress/gzip`).
+* **Codificadores:**
+  * `b32768` (Default - Menor número de caracteres no chat).
+  * `b91` (Base91 - Compacto em ASCII puro).
+  * `b85` (Base85 - Padrão balanceado e seguro).
+  * `b64` (Base64 - Padrão clássico).
+
+---
+
+## 📜 Especificação do Formato (OpenSpec)
+
+O texto gerado deve seguir o contrato de envelope padronizado:
+```
+PACK2TXT:v1:<compressor>:<encoder>:<payload>
+```
+* **Exemplo:** `PACK2TXT:v1:brotli:b32768:4820:一丁丂七...`
+* **Campos:**
+  * `PACK2TXT`: Identificador mágico do protocolo.
+  * `v1`: Versão do formato.
+  * `<compressor>`: `brotli` | `zstd` | `gzip` | `none`.
+  * `<encoder>`: `b32768` | `b91` | `b85` | `b64`.
+  * `<payload>`: Texto codificado.
+
+O descompactador deve ser capaz de:
+1. Ler envelopes `PACK2TXT:v1:...` e configurar automaticamente o pipeline.
+2. Fazer fallback e autodetectar caso o usuário passe strings puras sem o cabeçalho.
+
+---
+
+## 📋 Regras de Execução & Eficiência do Gemini Harness (Token Efficiency)
+1. **Pense antes de codificar:** Apresente um plano sucinto antes de criar ou modificar arquivos.
+2. **Eficiência de Contexto:** Não faça dumps gigantescos de código. Crie arquivos modulares e use diffs precisos.
+3. **Desenvolvimento Orientado a Testes (TDD):** Crie testes unitários para cada codificador e compressor antes de ligar a CLI.
+4. **Segurança (Zip Slip Protection):** Valide estritamente os caminhos relativos ao extrair para evitar vulnerabilidades de path traversal (`../`).
+5. **Suporte a Pipes Unix:** O CLI deve aceitar dados via `stdin` e gerar saída via `stdout` para permitir composições com comandos como `cat`, `pbcopy`, `xclip` ou `clip.exe`.
+
+---
+
+## 🐙 Melhores Práticas de Git e GitHub
+1. **Estrutura de Repositório Padrão Go:**
+   ```text
+   pack2txt/
+   ├── .github/workflows/release.yml   # Build, testes e release multi-plataforma
+   ├── cmd/pack2txt/main.go            # Ponto de entrada
+   ├── internal/
+   │   ├── archive/                   # Solid TAR streaming em memória
+   │   ├── compressor/                # Brotli Q11, Zstd, Deflate
+   │   ├── encoder/                   # Base32768, Base91, Base85, Base64
+   │   ├── packer/                    # Orquestração do pipeline (Pack/Unpack/Inspect)
+   │   └── ui/                        # Tabelas, cores e progresso no terminal
+   ├── .gitignore
+   ├── go.mod
+   ├── go.sum
+   └── README.md
+   ```
+2. **Conventional Commits:** Utilize `feat:`, `fix:`, `docs:`, `test:`, `refactor:`.
+3. **GitHub Actions (CI/CD):** Crie um workflow que gere os binários prontos para download (Windows `.exe`, Linux e macOS) a cada tag/release criada via `goreleaser` ou `go build`.
+
+---
+
+## 🚀 Roteiro de Implementação (Passo a Passo)
+
+### Fase 1: Fundação e Testes Unitários
+- Inicializar módulo Go (`go mod init github.com/<seu-usuario>/pack2txt`).
+- Implementar e testar `internal/encoder/` (Base32768 por padrão, Base85, Base91, Base64).
+- Implementar e testar `internal/compressor/` com Brotli Q11 por padrão e modo `auto`.
+
+### Fase 2: Pipeline de Arquivo e Segurança
+- Implementar `internal/archive/` (criação e leitura de TAR em memória).
+- Implementar `internal/packer/` com validação estrita anti-path traversal.
+
+### Fase 3: CLI e Experiência do Usuário
+- Criar comandos Cobra:
+  - `pack2txt pack <origem> [-o saida.txt] [-e b32768|b85|b91|b64] [-c auto|brotli|zstd] [--stdout]` (Default: `-e b32768 -c brotli`)
+  - `pack2txt unpack [arquivo.txt|stdin] [-d pasta_destino]`
+  - `pack2txt inspect [arquivo.txt]` (ver arquivos e tamanhos sem extrair)
+- Atalho conveniente: Se rodar `pack2txt <caminho_da_pasta>`, assume o subcomando `pack`.
+
+### Fase 4: CI/CD e Documentação
+- Criar `.github/workflows/release.yml` com suporte a `GOOS=windows`, `GOOS=linux` e `GOOS=darwin`.
+- Criar `README.md` completo com instruções claras, benchmarks e exemplos práticos de uso.
+
+---
+Por favor, comece confirmando a estrutura e inicializando o módulo Go com a Fase 1.
