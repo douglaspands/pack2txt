@@ -36,6 +36,16 @@ Os tokenizadores modernos agrupam caracteres Unicode comuns (especialmente da fa
   - Codificado em Base32768: **~36.267 caracteres (~9.200 tokens)**
 * **Resultado:** **Redução de ~60% no consumo de tokens do contexto!**
 
+### 2.3 Transporte por Imagem (canais que só aceitam imagem, não texto)
+Quando o destino é um app de chat que só aceita colagem de imagem (não uma caixa de texto), `pack2txt pack --image` (SPEC-008) codifica o payload comprimido como PNG em vez de texto — sem custo de tokens algum para o agente que só precisa *gerar* o arquivo, mas relevante para quem for *ler* a imagem depois (ex.: outro agente com visão). Dois perfis, com trade-off de tamanho de imagem vs. robustez:
+
+| Perfil | Bits/módulo | Overhead RS | Robustez |
+|---|---|---|---|
+| `digital` (padrão) | 3 (8 níveis de cinza) | ~37,5% | Anexo de arquivo ou colagem com recompressão JPEG |
+| `camera-safe` (`--camera-safe`) | 1 (binário) | ~58% | Também tolera rotação/escala/iluminação desigual/ruído — **correção de perspectiva real de câmera ainda não implementada** (ver `openspec/SPEC-008_IMAGE_CODEC.md` §3.4/§7) |
+
+`camera-safe` produz imagens bem maiores (módulos maiores, menor densidade) — recomendado só para payloads pequenos (poucos KB).
+
 ---
 
 ## 3. Diretrizes de Otimização para Prompts e Agentes de IA

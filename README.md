@@ -20,6 +20,7 @@
   - [3. inspect (Inspecionar em Memória)](#3-pack2txt-inspect-arquivotxt-)
   - [4. version (Versão)](#4-pack2txt-version)
   - [5. Atalho Inteligente](#5-atalho-inteligente)
+- [🖼️ Transporte por Imagem (`--image`)](#️-transporte-por-imagem---image)
 - [⚙️ Detalhamento Completo de Flags & Parâmetros](#️-detalhamento-completo-de-flags--parâmetros)
 - [🗜️ Motores de Compressão (Brotli, Zstd, Gzip, Auto)](#️-motores-de-compressão)
 - [🔡 Codificadores Textuais (Base32768, Base91, Base85, Base64)](#-codificadores-textuais)
@@ -160,6 +161,36 @@ pack2txt ./meu_projeto -o out.txt
 
 ---
 
+## 🖼️ Transporte por Imagem (`--image`)
+
+Para canais que **só aceitam colar/enviar imagem** (não uma caixa de texto), o `pack2txt` pode codificar o pacote comprimido como um **PNG** em vez de um envelope de texto — uma grade de módulos protegida por correção de erro Reed-Solomon (ver [SPEC-008](openspec/SPEC-008_IMAGE_CODEC.md)).
+
+```bash
+# Gera uma imagem PNG a partir da pasta (perfil "digital", o padrão)
+pack2txt pack ./meu_projeto --image -o pacote.png
+
+# Perfil robusto a foto de celular: imagem maior, tolera rotação/escala/
+# iluminação desigual/ruído (mas ainda não corrige uma foto tirada em ângulo real)
+pack2txt pack ./meu_projeto --image --camera-safe -o pacote.png
+
+# unpack/inspect detectam PNG/JPEG automaticamente — nenhuma flag extra necessária
+pack2txt unpack pacote.png -d ./restaurado
+pack2txt inspect pacote.png
+```
+
+### Perfis disponíveis
+
+| Perfil | Flag | Densidade | Cobre |
+|---|---|---|---|
+| `digital` ⭐ | padrão | Maior (imagem menor) | Anexo de arquivo ou colagem com recompressão JPEG por apps de chat |
+| `camera-safe` | `--camera-safe` | Menor (imagem bem maior) | Também tolera rotação, escala, iluminação desigual, ruído e recompressão JPEG |
+
+**Limitação conhecida:** nenhum dos dois perfis corrige **perspectiva real de câmera** (uma foto tirada em ângulo) ainda — só rotação/escala/iluminação/ruído. Ver [SPEC-008 §3.4 e §7](openspec/SPEC-008_IMAGE_CODEC.md) para os detalhes técnicos e o que falta.
+
+No modo `--image`, a flag `-c/--compressor` é ignorada (sempre usa `auto`, para minimizar o tamanho da imagem gerada); a saída exige `-o <arquivo.png>` ou `--stdout` (bytes PNG binários na saída padrão).
+
+---
+
 ## ⚙️ Detalhamento Completo de Flags & Parâmetros
 
 ### Flags do Comando `pack`
@@ -170,6 +201,8 @@ pack2txt ./meu_projeto -o out.txt
 | `--encoder` | `-e` | `string` | `"b32768"` | Codificador binário-para-texto: `b32768`, `b91`, `b85` ou `b64`. |
 | `--stdout` | | `bool` | `false` | Emite **apenas** a string limpa do envelope para `stdout`, suprimindo caixas decorativas (essencial para pipes Unix). |
 | `--no-ignore` | | `bool` | `false` | Desativa o filtro padrão de exclusões, incluindo pastas como `.git`, `node_modules`, `.venv`, etc. |
+| `--image` | | `bool` | `false` | Codifica como imagem PNG (SPEC-008) em vez de envelope de texto — ver [Transporte por Imagem](#️-transporte-por-imagem---image). Ignora `--compressor`/`--encoder`. |
+| `--camera-safe` | | `bool` | `false` | Com `--image`: usa o perfil robusto a foto de câmera (imagem maior, tolera perspectiva leve/iluminação/ruído). |
 
 ### Flags do Comando `unpack`
 | Flag | Alias | Tipo | Padrão | Descrição e Significado |
@@ -266,6 +299,7 @@ O projeto foi desenvolvido sob a metodologia **Spec-Driven Development**. Todas 
 - **[SPEC-005](openspec/SPEC-005_SECURITY_ZIP_SLIP.md):** Segurança Rigorosa & Defesa Anti-Zip Slip.
 - **[SPEC-006](openspec/SPEC-006_CLI_PIPES_UX.md):** Interface CLI, Pipes Unix & Terminal UX.
 - **[SPEC-007](openspec/SPEC-007_CI_CD_DISTRIBUTION.md):** CI/CD Multi-Plataforma & Distribuição.
+- **[SPEC-008](openspec/SPEC-008_IMAGE_CODEC.md):** Transporte por Imagem & Codec de Módulos Tolerante a Perdas (🟡 em desenvolvimento).
 
 ---
 

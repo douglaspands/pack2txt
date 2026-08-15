@@ -54,6 +54,8 @@ type packFlagsStruct struct {
 	encName    string
 	stdout     bool
 	noIgnore   bool
+	imageOut   bool
+	cameraSafe bool
 }
 
 var packFlags packFlagsStruct
@@ -72,6 +74,10 @@ var packCmd = &cobra.Command{
 func runPack(sourcePath string, flags packFlagsStruct) error {
 	isInteractive := ui.IsTerminal(os.Stdout)
 	isPipe := flags.stdout || !isInteractive
+
+	if flags.imageOut {
+		return runPackImage(sourcePath, flags, isPipe)
+	}
 
 	opts := packer.PackOptions{
 		SourcePath: sourcePath,
@@ -97,6 +103,40 @@ func runPack(sourcePath string, flags packFlagsStruct) error {
 		}
 	}
 
+	return nil
+}
+
+// runPackImage handles `pack --image`: -c/--compressor is ignored (SPEC-008 decision 6 —
+// the image transport always uses "auto" to minimize image size) with a warning if the
+// user explicitly passed a non-default value.
+func runPackImage(sourcePath string, flags packFlagsStruct, isPipe bool) error {
+	if flags.compName != "" && flags.compName != compressor.NameBrotli {
+		fmt.Fprintln(os.Stderr, "aviso: --compressor é ignorado no modo --image (sempre usa \"auto\" para minimizar o tamanho da imagem)")
+	}
+	if !isPipe && flags.outputPath == "" {
+		return fmt.Errorf("--image requer -o <arquivo.png> (ou --stdout para escrever os bytes PNG na saída padrão)")
+	}
+
+	opts := packer.PackImageOptions{
+		SourcePath: sourcePath,
+		NoIgnore:   flags.noIgnore,
+		OutputPath: flags.outputPath,
+		CameraSafe: flags.cameraSafe,
+	}
+
+	result, err := packer.PackImage(opts)
+	if err != nil {
+		return err
+	}
+
+	if flags.stdout {
+		_, err := os.Stdout.Write(result.PNGBytes)
+		return err
+	}
+
+	fmt.Fprintf(os.Stderr, "OK: %s (%s, %dx%d px, %s)\n",
+		result.OutputPath, result.Profile, result.ImageWidth, result.ImageHeight,
+		ui.FormatBytes(int64(result.ImageBytes)))
 	return nil
 }
 
@@ -197,6 +237,8 @@ func init() {
 	packCmd.Flags().StringVarP(&packFlags.encName, "encoder", "e", encoder.NameBase32768, "Codificador textual (b32768 | b91 | b85 | b64)")
 	packCmd.Flags().BoolVar(&packFlags.stdout, "stdout", false, "Emite apenas o texto do envelope na saída padrão (ideal para pipes)")
 	packCmd.Flags().BoolVar(&packFlags.noIgnore, "no-ignore", false, "Não ignora pastas e arquivos de build/dev (.git, node_modules, etc.)")
+	packCmd.Flags().BoolVar(&packFlags.imageOut, "image", false, "Codifica como imagem PNG (SPEC-008) em vez de texto, para colar em apps de chat")
+	packCmd.Flags().BoolVar(&packFlags.cameraSafe, "camera-safe", false, "Com --image: usa o perfil robusto a foto de câmera (imagem maior, tolera perspectiva/iluminação)")
 
 	// Compartilha flags no root para comando atalho
 	rootCmd.Flags().StringVarP(&packFlags.outputPath, "output", "o", "", "Caminho do arquivo de saída .txt")
@@ -204,6 +246,8 @@ func init() {
 	rootCmd.Flags().StringVarP(&packFlags.encName, "encoder", "e", encoder.NameBase32768, "Codificador textual (b32768 | b91 | b85 | b64)")
 	rootCmd.Flags().BoolVar(&packFlags.stdout, "stdout", false, "Emite apenas o texto do envelope na saída padrão")
 	rootCmd.Flags().BoolVar(&packFlags.noIgnore, "no-ignore", false, "Não ignora pastas padrão de desenvolvimento")
+	rootCmd.Flags().BoolVar(&packFlags.imageOut, "image", false, "Codifica como imagem PNG (SPEC-008) em vez de texto, para colar em apps de chat")
+	rootCmd.Flags().BoolVar(&packFlags.cameraSafe, "camera-safe", false, "Com --image: usa o perfil robusto a foto de câmera")
 
 	// Flags do comando unpack
 	unpackCmd.Flags().StringVarP(&unpackFlags.destDir, "dest", "d", ".", "Diretório de destino para extração")
