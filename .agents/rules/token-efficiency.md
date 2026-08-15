@@ -15,3 +15,11 @@ always_on: true
 
 3. **Segurança Obrigatória:**
    - Nunca desative as verificações de Zip Slip e Path Traversal ao modificar ou estender os módulos de extração.
+
+4. **Transporte por Imagem (destino só aceita imagem):**
+   - Use `pack2txt pack <pasta> --image -o pacote.png` (perfil `digital`, padrão) ou `--camera-safe` (perfil robusto a foto de câmera, imagem maior) quando o canal de destino só aceita imagem colada, não texto.
+   - `unpack`/`inspect` detectam PNG/JPEG automaticamente, sem flag extra.
+   - Ver `openspec/SPEC-008_IMAGE_CODEC.md` para os dois perfis e limitações conhecidas (correção de perspectiva real de câmera ainda não implementada).
+
+5. **Spec-Driven Development obrigatório:**
+   - Nova funcionalidade/encoder/compressor/comando? Siga `openspec/SPEC_LIFECYCLE.md` antes de escrever código de produção.

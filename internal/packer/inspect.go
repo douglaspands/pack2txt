@@ -1,13 +1,16 @@
 package packer
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
 	"github.com/douglas/pack2txt/internal/archive"
+	"github.com/douglas/pack2txt/internal/compressor"
 	"github.com/douglas/pack2txt/internal/encoder"
+	"github.com/douglas/pack2txt/internal/imagecodec"
 )
 
 // InspectOptions defines the configuration for inspecting an archive without extracting it.
@@ -59,6 +62,10 @@ func Inspect(opts InspectOptions) (*InspectResult, error) {
 
 	if strings.TrimSpace(rawText) == "" {
 		return nil, fmt.Errorf("empty inspect input")
+	}
+
+	if DetectFormat([]byte(rawText)) == FormatImage {
+		return inspectImage([]byte(rawText))
 	}
 
 	// Parse envelope
@@ -121,5 +128,57 @@ func Inspect(opts InspectOptions) (*InspectResult, error) {
 		Compressor:       env.Compressor,
 		Encoder:          env.Encoder,
 		EnvelopeVersion:  env.Version,
+	}, nil
+}
+
+// inspectImage mirrors Inspect's decode->decompress->list pipeline, but sourced from a
+// SPEC-008 image container instead of the text envelope.
+func inspectImage(data []byte) (*InspectResult, error) {
+	compressedBytes, compName, err := imagecodec.DecodeAuto(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("image decode failed: %w", err)
+	}
+	comp, err := compressor.Get(compName)
+	if err != nil {
+		return nil, err
+	}
+	tarBytes, err := comp.Decompress(compressedBytes)
+	if err != nil {
+		return nil, fmt.Errorf("decompression failed: %w", err)
+	}
+
+	entries, err := archive.ListTarEntries(tarBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed listing tar entries: %w", err)
+	}
+
+	var totalUncompressed int64
+	fileCount, dirCount := 0, 0
+	for _, entry := range entries {
+		if entry.IsDir {
+			dirCount++
+		} else {
+			fileCount++
+			totalUncompressed += entry.Size
+		}
+	}
+
+	compressedSize := int64(len(compressedBytes))
+	var savings float64
+	if totalUncompressed > 0 {
+		savings = (1.0 - (float64(compressedSize) / float64(totalUncompressed))) * 100.0
+	}
+
+	return &InspectResult{
+		Entries:          entries,
+		FileCount:        fileCount,
+		DirCount:         dirCount,
+		UncompressedSize: totalUncompressed,
+		CompressedSize:   compressedSize,
+		EncodedChars:     0,
+		SavingsPercent:   savings,
+		Compressor:       compName,
+		Encoder:          "image",
+		EnvelopeVersion:  "image-v1",
 	}, nil
 }
